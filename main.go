@@ -1,13 +1,17 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"os"
 
+	_ "github.com/lib/pq"
 	"github.com/zyaeger/blog-agg/internal/config"
+	"github.com/zyaeger/blog-agg/internal/database"
 )
 
 type state struct {
+	db *database.Queries
 	cfg *config.Config
 }
 
@@ -17,7 +21,15 @@ func main() {
 		log.Fatalf("error reading config: %v", err)
 	}
 
+	db, err := sql.Open("postgres", cfg.DBUrl)
+	if err != nil {
+		log.Fatalf("error connecting to DB: %v", err)
+	}
+	defer db.Close()
+	dbQueries := database.New(db)
+	
 	programState := state{
+		db: dbQueries,
 		cfg: &cfg,
 	}
 
@@ -25,6 +37,7 @@ func main() {
 		cmdToHandler: make(map[string]func(*state, command) error),
 	}
 	cmds.register("login", handlerLogin)
+	cmds.register("register", handlerRegister)
 
 	cliArgs := os.Args
 	if len(cliArgs) < 2 {
