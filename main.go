@@ -27,7 +27,7 @@ func main() {
 	}
 	defer db.Close()
 	dbQueries := database.New(db)
-	
+
 	programState := state{
 		db: dbQueries,
 		cfg: &cfg,
@@ -38,6 +38,7 @@ func main() {
 	}
 	cmds.register("login", handlerLogin)
 	cmds.register("register", handlerRegister)
+	cmds.register("reset", handlerReset)
 
 	cliArgs := os.Args
 	if len(cliArgs) < 2 {
