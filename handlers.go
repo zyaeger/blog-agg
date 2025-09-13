@@ -33,7 +33,7 @@ func handlerLogin(s *state, cmd command) error {
 
 func handlerRegister(s *state, cmd command) error {
 	if len(cmd.Args) == 0 {
-		return errors.New("one argument expected for login: name")
+		return errors.New("one argument expected for register: name")
 	}
 	ctx := context.Background()
 	name := cmd.Args[0]
@@ -91,11 +91,6 @@ func handlerUsers(s *state, cmd command) error {
 	return nil
 }
 
-func printUser(user database.User) {
-	fmt.Printf(" * ID:      %v\n", user.ID)
-	fmt.Printf(" * Name:    %v\n", user.Name)
-}
-
 func handlerAgg(s *state, cmd command) error {
 	url := "https://www.wagslane.dev/index.xml"
 	feed, err := fetchFeed(context.Background(), url)
@@ -105,4 +100,53 @@ func handlerAgg(s *state, cmd command) error {
 
 	fmt.Println("Feed:", feed)
 	return nil
+}
+
+func handlerAddFeed(s *state, cmd command) error {
+	if len(cmd.Args) != 2 {
+		return fmt.Errorf("usage: %s <name> <url>", cmd.Name)
+	}
+	currentUser := s.cfg.CurrentUserName
+	user, err := s.db.GetUser(context.Background(), currentUser)
+	if err != nil {
+		fmt.Printf("cannot find user %s in DB\n", currentUser)
+		return err
+	}
+
+	name := cmd.Args[0]
+	url := cmd.Args[1]
+	feedParams := database.CreateFeedParams{
+		ID: uuid.New(),
+		Name: name,
+		Url: url,
+		UserID: user.ID,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+
+	feed, err := s.db.CreateFeed(context.Background(), feedParams)
+	if err != nil {
+		return fmt.Errorf("couldn't create feed: %w", err)
+	}
+
+	fmt.Println("Feed created successfully!")
+	printFeed(feed)
+	fmt.Println()
+	fmt.Println("=====================================")
+
+	return nil
+}
+
+func printUser(user database.User) {
+	fmt.Printf("* ID:      %v\n", user.ID)
+	fmt.Printf("* Name:    %v\n", user.Name)
+}
+
+func printFeed(feed database.Feed) {
+	fmt.Printf("* ID:            %s\n", feed.ID)
+	fmt.Printf("* Name:          %s\n", feed.Name)
+	fmt.Printf("* URL:           %s\n", feed.Url)
+	fmt.Printf("* UserId:        %s\n", feed.UserID)
+	fmt.Printf("* Created:       %v\n", feed.CreatedAt)
+	fmt.Printf("* Updated:       %v\n", feed.UpdatedAt)
 }
