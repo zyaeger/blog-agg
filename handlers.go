@@ -38,10 +38,10 @@ func handlerRegister(s *state, cmd command) error {
 	ctx := context.Background()
 	name := cmd.Args[0]
 	userParams := database.CreateUserParams{
-		ID: uuid.New(),
+		ID:        uuid.New(),
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
-		Name: name,
+		Name:      name,
 	}
 	user, err := s.db.CreateUser(ctx, userParams)
 	if err != nil {
@@ -94,4 +94,15 @@ func handlerUsers(s *state, cmd command) error {
 func printUser(user database.User) {
 	fmt.Printf(" * ID:      %v\n", user.ID)
 	fmt.Printf(" * Name:    %v\n", user.Name)
+}
+
+func handlerAgg(s *state, cmd command) error {
+	url := "https://www.wagslane.dev/index.xml"
+	feed, err := fetchFeed(context.Background(), url)
+	if err != nil {
+		return fmt.Errorf("couldn't fetch rss feed: %w", err)
+	}
+
+	fmt.Println("Feed:", feed)
+	return nil
 }
