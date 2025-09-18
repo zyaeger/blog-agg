@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -242,6 +245,36 @@ func handlerUnfollow(s *state, cmd command, user database.User) error {
 	return nil
 }
 
+func handlerBrowse(s * state, cmd command, user database.User) error {
+	limit := 2
+	if len(cmd.Args) == 1 {
+		if specLimit, err := strconv.Atoi(cmd.Args[0]); err == nil {
+			limit = specLimit
+		} else {
+			return fmt.Errorf("invalid limit: %w", err)
+		}
+	}
+
+	getPostForUserParam := database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit: int32(limit),
+	}
+	posts, err := s.db.GetPostsForUser(context.Background(), getPostForUserParam)
+	if err != nil {
+		return fmt.Errorf("couldn't get posts for user: %w", err)
+	}
+
+	fmt.Printf("Found %d posts for user %s:\n", len(posts), user.Name)
+	for _, post := range posts {
+		fmt.Printf("%s from %s\n", post.PublishedAt.Time.Format("Mon Jan 2"), post.FeedName)
+		fmt.Printf("--- %s ---\n", post.Title)
+		fmt.Printf("    %v\n", post.Description.String)
+		fmt.Printf("Link: %s\n", post.Url)
+		fmt.Println("=====================================")
+	}
+	return nil
+}
+
 func printUser(user database.User) {
 	fmt.Printf("* ID:      %v\n", user.ID)
 	fmt.Printf("* Name:    %v\n", user.Name)
@@ -254,6 +287,7 @@ func printFeed(feed database.Feed, user database.User) {
 	fmt.Printf("* User:          %s\n", user.ID)
 	fmt.Printf("* Created:       %v\n", feed.CreatedAt)
 	fmt.Printf("* Updated:       %v\n", feed.UpdatedAt)
+	fmt.Printf("* LastFetchedAt: %v\n", feed.LastFetchedAt.Time)
 }
 
 func printFeedFollow(username, feedname string) {
@@ -286,7 +320,31 @@ func scrapeFeed(db *database.Queries, feed database.Feed) {
 	}
 
 	for _, rssItem := range feedData.Channel.Item {
-		fmt.Printf("Found post: %s\n", rssItem.Title)
+		publishedAt := sql.NullTime{}
+		if t, err := time.Parse(time.RFC1123Z, rssItem.PubDate); err == nil {
+			publishedAt = sql.NullTime{
+				Time: t,
+				Valid: true,
+			}
+		}
+		postParams := database.CreatePostParams{
+			ID:          uuid.New(),
+			CreatedAt:   time.Now().UTC(),
+			UpdatedAt:   time.Now().UTC(),
+			Title:       rssItem.Title,
+			Url:         rssItem.Link,
+			Description: sql.NullString{String: rssItem.Description, Valid: true},
+			PublishedAt: publishedAt,
+			FeedID:      feed.ID,
+		}
+		_, err := db.CreatePost(context.Background(), postParams)
+		if err != nil {
+			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+				continue
+			}
+			fmt.Printf("couldn't create post: %v", err)
+			continue
+		}
 	}
 	fmt.Printf("Feed %s collected, %v posts found\n", feed.Name, len(feedData.Channel.Item))
 }
