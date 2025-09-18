@@ -92,14 +92,20 @@ func handlerUsers(s *state, cmd command) error {
 }
 
 func handlerAgg(s *state, cmd command) error {
-	url := "https://www.wagslane.dev/index.xml"
-	feed, err := fetchFeed(context.Background(), url)
-	if err != nil {
-		return fmt.Errorf("couldn't fetch rss feed: %w", err)
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: %s <time_between_reqs>", cmd.Name)
 	}
 
-	fmt.Println("Feed:", feed)
-	return nil
+	timeBetweenReqs, err := time.ParseDuration(cmd.Args[0])
+	if err != nil {
+		return fmt.Errorf("couldn't convert to time.Duration: %w", err)
+	}
+
+	fmt.Printf("Collecting feeds every %s...\n", timeBetweenReqs)
+	ticker := time.NewTicker(timeBetweenReqs)
+	for ; ; <-ticker.C {
+		scrapeFeeds(s)
+	}
 }
 
 func handlerAddFeed(s *state, cmd command, user database.User) error {
@@ -136,7 +142,7 @@ func handlerAddFeed(s *state, cmd command, user database.User) error {
 	}
 
 	fmt.Println("Feed created successfully!")
-	printFeed(feed)
+	printFeed(feed, user)
 	printFeedFollow(feedFollow.UserName, feedFollow.FeedName)
 	fmt.Println()
 	fmt.Println("=====================================")
@@ -157,9 +163,11 @@ func handlerGetFeeds(s *state, cmd command) error {
 
 	fmt.Printf("Found %d feeds:\n", len(feeds))
 	for _, feed := range feeds {
-		fmt.Println("* Feed:", feed.FeedName)
-		fmt.Println("* Feed URL:", feed.FeedUrl)
-		fmt.Println("* Feed User:", feed.Username)
+		user, err := s.db.GetUserById(context.Background(), feed.UserID)
+		if err != nil {
+			return fmt.Errorf("couldn't get user: %w", err)
+		}
+		printFeed(feed, user)
 		fmt.Println("=====================================")
 	}
 	return nil
@@ -239,11 +247,11 @@ func printUser(user database.User) {
 	fmt.Printf("* Name:    %v\n", user.Name)
 }
 
-func printFeed(feed database.Feed) {
+func printFeed(feed database.Feed, user database.User) {
 	fmt.Printf("* ID:            %s\n", feed.ID)
 	fmt.Printf("* Name:          %s\n", feed.Name)
 	fmt.Printf("* URL:           %s\n", feed.Url)
-	fmt.Printf("* UserId:        %s\n", feed.UserID)
+	fmt.Printf("* User:          %s\n", user.ID)
 	fmt.Printf("* Created:       %v\n", feed.CreatedAt)
 	fmt.Printf("* Updated:       %v\n", feed.UpdatedAt)
 }
@@ -251,4 +259,34 @@ func printFeed(feed database.Feed) {
 func printFeedFollow(username, feedname string) {
 	fmt.Printf("* User:          %s\n", username)
 	fmt.Printf("* Feed:          %s\n", feedname)
+}
+
+func scrapeFeeds(s *state) {
+	feed, err := s.db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		fmt.Println("couldn't fetch next feed:", err)
+		return
+	}
+	fmt.Println("Found a feed to fetch")
+
+	scrapeFeed(s.db, feed)
+}
+
+func scrapeFeed(db *database.Queries, feed database.Feed) {
+	_, err := db.MarkFeedFetched(context.Background(), feed.ID)
+	if err != nil {
+		fmt.Printf("couldn't mark feed %s as fetched: %v\n", feed.Name, err)
+		return
+	}
+
+	feedData, err := fetchFeed(context.Background(), feed.Url)
+	if err != nil {
+		fmt.Printf("couldn't collect feed %s: %v", feed.Name, err)
+		return
+	}
+
+	for _, rssItem := range feedData.Channel.Item {
+		fmt.Printf("Found post: %s\n", rssItem.Title)
+	}
+	fmt.Printf("Feed %s collected, %v posts found\n", feed.Name, len(feedData.Channel.Item))
 }
