@@ -99,13 +99,13 @@ func handlerAgg(s *state, cmd command) error {
 		return fmt.Errorf("usage: %s <time_between_reqs>", cmd.Name)
 	}
 
-	timeBetweenReqs, err := time.ParseDuration(cmd.Args[0])
+	timeBetweenRequests, err := time.ParseDuration(cmd.Args[0])
 	if err != nil {
 		return fmt.Errorf("couldn't convert to time.Duration: %w", err)
 	}
 
-	fmt.Printf("Collecting feeds every %s...\n", timeBetweenReqs)
-	ticker := time.NewTicker(timeBetweenReqs)
+	fmt.Printf("Collecting feeds every %s...\n", timeBetweenRequests)
+	ticker := time.NewTicker(timeBetweenRequests)
 	for ; ; <-ticker.C {
 		scrapeFeeds(s)
 	}
