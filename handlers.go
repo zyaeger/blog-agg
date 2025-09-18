@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zyaeger/blog-agg/internal/database"
+	"github.com/zyaeger/gator/internal/database"
 )
 
 func handlerLogin(s *state, cmd command) error {

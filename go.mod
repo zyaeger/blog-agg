@@ -1,4 +1,4 @@
-module github.com/zyaeger/blog-agg
+module github.com/zyaeger/gator
 
 go 1.25.0
 
